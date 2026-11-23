@@ -13,7 +13,7 @@ const DEFAULTS = {
   },
   sources: {
     gameId: '', gameName: '',
-    camEnabled: false, camId: '', camCorner: 'br', camSize: 22,
+    camEnabled: false, camId: '', camCorner: 'br', camSize: 22, camFilter: 'guzel',
     micEnabled: true, micId: 'default', micGain: 1, micNoise: true,
     deskEnabled: true, deskGain: 1
   },

@@ -3,6 +3,73 @@
 (function () {
   const { PLATFORMS, TYPE_ICON, nameColor } = window.ChatRender;
   const FONT = '"Segoe UI", "Segoe UI Emoji", system-ui, sans-serif';
+  // Kamera filtreleri (WebGL). smooth: cilt yumuşatma gücü, sharp: ten dışı detay keskinliği, rad: yumuşatma yarıçapı (px)
+  const CAM_FILTERS = {
+    guzel: { smooth: 0.85, sharp: 0.5, rad: 5, bright: 1.05, contrast: 1.06, sat: 1.08, warm: 0.01, glow: 0.03 },
+    sicak: { smooth: 0.5, sharp: 0.35, rad: 4, bright: 1.04, contrast: 1.05, sat: 1.2, warm: 0.03, glow: 0.02 },
+    sinema: { smooth: 0, sharp: 0.3, rad: 4, bright: 0.98, contrast: 1.18, sat: 0.85, warm: 0.015, glow: 0 }
+  };
+
+  // Kenar koruyan (bilateral) cilt yumuşatma: sadece ten rengindeki pikseller yumuşar, göz/saç/arka plan keskin kalır.
+  const FX_VS = 'attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0.,1.);}';
+  const FX_FS = `precision mediump float;varying vec2 v;uniform sampler2D t;uniform vec4 rect;uniform vec2 px;
+uniform float smoothAmt,sharp,rad,bright,contrast,sat,warm,glow;
+vec3 tx(vec2 u){return texture2D(t,rect.xy+u*rect.zw).rgb;}
+float skin(vec3 c){float y=dot(c,vec3(.299,.587,.114));float cb=(c.b-y)*.564+.5,cr=(c.r-y)*.713+.5;
+ return smoothstep(.27,.31,cb)*(1.-smoothstep(.49,.53,cb))*smoothstep(.49,.53,cr)*(1.-smoothstep(.68,.72,cr))*smoothstep(.12,.25,y);}
+void main(){
+ vec3 c=tx(v),acc=c;float ws=1.;
+ for(int i=0;i<16;i++){float a=float(i)*2.39996,r=sqrt((float(i)+.5)/16.)*rad;
+  vec3 s=tx(v+vec2(cos(a),sin(a))*r*px),d=s-c;float w=exp(-dot(d,d)/.02);acc+=s*w;ws+=w;}
+ vec3 sm=acc/ws;float m=skin(c)*smoothAmt;
+ vec3 o=mix(c,sm,m)+(c-sm)*sharp*(1.-m)+m*glow;
+ o=(o-.5)*contrast+.5;o*=bright;float l=dot(o,vec3(.299,.587,.114));o=mix(vec3(l),o,sat);o.r+=warm;o.b-=warm;
+ gl_FragColor=vec4(clamp(o,0.,1.),1.);}`;
+
+  class CamFx {
+    constructor() {
+      const cv = (this.cv = document.createElement('canvas'));
+      const gl = (this.gl = cv.getContext('webgl', { premultipliedAlpha: false, preserveDrawingBuffer: true }));
+      this.ok = false;
+      if (!gl) return;
+      const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
+      const pr = (this.pr = gl.createProgram());
+      gl.attachShader(pr, sh(gl.VERTEX_SHADER, FX_VS));
+      gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FX_FS));
+      gl.linkProgram(pr);
+      if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) { console.warn('CamFx: shader derlenemedi', gl.getProgramInfoLog(pr)); return; }
+      gl.useProgram(pr);
+      gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+      const loc = gl.getAttribLocation(pr, 'p');
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      this.u = (n) => gl.getUniformLocation(pr, n);
+      this.ok = true;
+    }
+
+    // r: camRect() (kaynak kırpması sx,sy,sw,sh + hedef w,h). Dönen canvas hedefe çizilmeye hazır.
+    render(video, r, p) {
+      const { gl, cv, u } = this;
+      const vw = video.videoWidth, vh = video.videoHeight;
+      const ow = Math.max(2, Math.min(Math.round(r.sw), Math.round(r.w * 2)));
+      const oh = Math.max(2, Math.round(ow * r.sh / r.sw));
+      if (cv.width !== ow || cv.height !== oh) { cv.width = ow; cv.height = oh; }
+      gl.viewport(0, 0, ow, oh);
+      try { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video); } catch { return null; }
+      gl.uniform4f(u('rect'), r.sx / vw, 1 - (r.sy + r.sh) / vh, r.sw / vw, r.sh / vh);
+      gl.uniform2f(u('px'), 1 / ow, 1 / oh);
+      gl.uniform1f(u('smoothAmt'), p.smooth); gl.uniform1f(u('sharp'), p.sharp); gl.uniform1f(u('rad'), p.rad);
+      gl.uniform1f(u('bright'), p.bright); gl.uniform1f(u('contrast'), p.contrast); gl.uniform1f(u('sat'), p.sat);
+      gl.uniform1f(u('warm'), p.warm); gl.uniform1f(u('glow'), p.glow);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      return cv;
+    }
+  }
 
   // ---------------------------------------------------------------- Ses
   class AudioMixer {
@@ -289,7 +356,11 @@
       ctx.fill();
       ctx.shadowBlur = 0;
       ctx.clip();
-      ctx.drawImage(this.camVideo, r.sx, r.sy, r.sw, r.sh, r.x, r.y, r.w, r.h);
+      const p = CAM_FILTERS[this.cfg.sources.camFilter];
+      const fx = p && (this.camFx || (this.camFx = new CamFx()));
+      const src = fx && fx.ok ? fx.render(this.camVideo, r, p) : null;
+      if (src) ctx.drawImage(src, 0, 0, src.width, src.height, r.x, r.y, r.w, r.h);
+      else ctx.drawImage(this.camVideo, r.sx, r.sy, r.sw, r.sh, r.x, r.y, r.w, r.h);
       ctx.restore();
       ctx.save();
       rr(ctx, r.x, r.y, r.w, r.h, 18 * s);

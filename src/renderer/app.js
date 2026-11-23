@@ -265,6 +265,7 @@
   function syncQuick() {
     $('#camEnabled').checked = !!S.sources.camEnabled;
     $('#camCorner').value = S.sources.camCorner;
+    $('#camFilter').value = S.sources.camFilter;
     $('#camSize').value = S.sources.camSize;
     $('#micGain').value = S.sources.micGain;
     $('#deskGain').value = S.sources.deskGain;
@@ -285,6 +286,7 @@
     if (e.target.value === 'phone' && !phoneStream) openPhoneCam();
   };
   $('#camCorner').onchange = (e) => save({ sources: { camCorner: e.target.value } });
+  $('#camFilter').onchange = (e) => { S.sources.camFilter = e.target.value; comp.configure(S); save({ sources: { camFilter: e.target.value } }); };
   const saveCamSize = debounce((v) => save({ sources: { camSize: v } }), 300);
   $('#camSize').oninput = (e) => { S.sources.camSize = Number(e.target.value); comp.configure(S); saveCamSize(S.sources.camSize); };
   $('#micId').onchange = async (e) => { await save({ sources: { micId: e.target.value } }); captureMic(); };
