@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0e12">
+<title>Chat</title>
+<style>
+  :root { --fs: 18px; }
+  html, body { margin: 0; background: #0d0e12; color: #eef0f4; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #14161c; border-bottom: 1px solid #262a35; z-index: 2; }
+  header b { flex: 1; }
+  header button { background: #1f2330; color: #fff; border: 1px solid #333a4a; border-radius: 8px; padding: 6px 10px; font-size: 15px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #ff3b4e; }
+  .dot.on { background: #3ddc84; }
+  #list { padding: 10px 12px 40px; display: flex; flex-direction: column; gap: 6px; }
+  .msg { font-size: var(--fs); line-height: 1.4; padding: 6px 10px; border-radius: 10px; background: #161922; word-wrap: break-word; }
+  .msg.hl { background: #2a1f48; border-left: 4px solid var(--pc); }
+  .pf { display: inline-block; font-size: .6em; font-weight: 800; padding: 1px 5px; border-radius: 4px; margin-right: 6px; vertical-align: .15em; }
+  .name { font-weight: 700; margin-right: 6px; }
+  .amount { background: #ffd43b; color: #222; font-weight: 800; padding: 0 6px; border-radius: 4px; margin-right: 6px; }
+  .emote { height: 1.5em; vertical-align: middle; }
+  .giftimg { height: 1.7em; vertical-align: middle; margin-right: 4px; }
+</style>
+</head>
+<body>
+<header><span id="dot" class="dot"></span><b>Chat</b><button id="minus">A−</button><button id="plus">A+</button></header>
+<div id="list"></div>
+<script>
+  const P = { youtube: ['YT', '#ff0033', '#fff'], kick: ['K', '#53fc18', '#111'], tiktok: ['TT', '#fe2c55', '#fff'] };
+  const ICON = { gift: '🎁 ', superchat: '💰 ', sub: '⭐ ', follow: '➕ ', raid: '🚀 ' };
+  const list = document.getElementById('list');
+  let fs = Number(localStorageGet('fs')) || 18;
+  function localStorageGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
+  function applyFs() { document.documentElement.style.setProperty('--fs', fs + 'px'); localStorageSet('fs', fs); }
+  applyFs();
+  document.getElementById('plus').onclick = () => { fs = Math.min(40, fs + 2); applyFs(); };
+  document.getElementById('minus').onclick = () => { fs = Math.max(12, fs - 2); applyFs(); };
+
+  function nearBottom() { return window.innerHeight + window.scrollY > document.body.scrollHeight - 80; }
+
+  function render(e) {
+    const stick = nearBottom();
+    const d = document.createElement('div');
+    const p = P[e.platform] || ['?', '#666', '#fff'];
+    d.className = 'msg' + (e.type !== 'chat' ? ' hl' : '');
+    d.dataset.id = e.id;
+    d.style.setProperty('--pc', p[1]);
+    const b = document.createElement('span'); b.className = 'pf'; b.textContent = p[0]; b.style.background = p[1]; b.style.color = p[2]; d.appendChild(b);
+    if (ICON[e.type]) d.append(ICON[e.type]);
+    const n = document.createElement('span'); n.className = 'name'; n.textContent = (e.user && e.user.name) || '?'; if (e.user && e.user.color) n.style.color = e.user.color; d.appendChild(n);
+    if (e.amount) { const a = document.createElement('span'); a.className = 'amount'; a.textContent = e.amount; d.appendChild(a); }
+    if (e.gift && e.gift.image) { const g = document.createElement('img'); g.className = 'giftimg'; g.src = e.gift.image; d.appendChild(g); }
+    for (const part of e.parts || []) {
+      if (part.t === 'img') { const i = document.createElement('img'); i.className = 'emote'; i.src = part.src; i.alt = part.alt || ''; i.referrerPolicy = 'no-referrer'; d.appendChild(i); }
+      else d.append(part.v || '');
+    }
+    list.appendChild(d);
+    while (list.children.length > 300) list.firstChild.remove();
+    if (stick) window.scrollTo(0, document.body.scrollHeight);
+  }
+
+  fetch('/history').then((r) => r.json()).then((h) => { h.forEach(render); window.scrollTo(0, document.body.scrollHeight); }).catch(() => {});
+
+  function connect() {
+    const ws = new WebSocket(`ws://${location.host}`);
+    ws.onopen = () => document.getElementById('dot').classList.add('on');
+    ws.onclose = () => { document.getElementById('dot').classList.remove('on'); setTimeout(connect, 2000); };
+    ws.onmessage = (m) => {
+      const msg = JSON.parse(m.data);
+      if (msg.kind === 'event') render(msg.data);
+      if (msg.kind === 'remove') for (const el of [...list.children]) if (el.dataset.id === msg.data.id || el.dataset.id === msg.data.raw) el.remove();
+    };
+  }
+  connect();
+</script>
+</body>
+</html>

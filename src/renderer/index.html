@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: mediastream:; connect-src 'self'">
+  <title>Yayıncı Stüdyo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo" aria-hidden="true"></span>Yayıncı Stüdyo</div>
+    <div class="live-info">
+      <span id="liveBadge" class="badge off">ÇEVRİMDIŞI</span>
+      <span id="liveTimer" class="timer">00:00:00</span>
+      <span id="liveStats" class="muted small"></span>
+    </div>
+    <div id="outputs" class="outputs"></div>
+    <div class="top-actions">
+      <label class="chk" title="Yayını aynı anda bilgisayara da kaydet"><input type="checkbox" id="recToggle"> Kaydet</label>
+      <button id="btnSettings" class="btn ghost">Ayarlar</button>
+      <button id="btnLive" class="btn live">Yayını Başlat</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <div class="preview-wrap">
+        <canvas id="out"></canvas>
+        <div id="sceneTag" class="scene-tag"></div>
+      </div>
+
+      <div class="scenes">
+        <button class="scene active" data-scene="game"><b>Oyun</b><small>Ctrl+Shift+1</small></button>
+        <button class="scene" data-scene="starting"><b>Başlıyoruz</b><small>Ctrl+Shift+2</small></button>
+        <button class="scene" data-scene="brb"><b>Mola</b><small>Ctrl+Shift+3</small></button>
+      </div>
+
+      <div class="panels">
+        <div class="panel">
+          <h3>Oyun / Ekran</h3>
+          <div class="src-current">
+            <div class="thumb"><img id="gameThumb" alt=""></div>
+            <div class="src-text">
+              <div id="gameName" class="ellipsis">Seçilmedi</div>
+              <small id="gameState" class="muted"></small>
+            </div>
+          </div>
+          <button id="btnPickGame" class="btn full">Kaynak seç</button>
+        </div>
+
+        <div class="panel">
+          <h3>Kamera <label class="switch"><input type="checkbox" id="camEnabled"><span></span></label></h3>
+          <select id="camId" class="full"></select>
+          <div class="row"><label for="camCorner">Köşe</label>
+            <select id="camCorner">
+              <option value="br">Sağ alt</option><option value="bl">Sol alt</option>
+              <option value="tr">Sağ üst</option><option value="tl">Sol üst</option>
+            </select>
+          </div>
+          <div class="row"><label for="camSize">Boyut</label><input type="range" id="camSize" min="10" max="45" step="1"></div>
+        </div>
+
+        <div class="panel">
+          <h3>Ses</h3>
+          <div class="mixer-ch">
+            <div class="ch-head">
+              <button class="mute" id="micMute" title="Mikrofonu aç/kapat (Ctrl+Shift+M)">🎤</button>
+              <span class="ch-name">Mikrofon</span>
+              <select id="micId"></select>
+            </div>
+            <div class="meter"><i id="micMeter"></i></div>
+            <input type="range" id="micGain" min="0" max="2" step="0.01">
+          </div>
+          <div class="mixer-ch">
+            <div class="ch-head">
+              <button class="mute" id="deskMute" title="Masaüstü sesini aç/kapat">🔊</button>
+              <span class="ch-name">Masaüstü / oyun sesi</span>
+            </div>
+            <div class="meter"><i id="deskMeter"></i></div>
+            <input type="range" id="deskGain" min="0" max="2" step="0.01">
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Oyun üstü chat <label class="switch" title="Ctrl+Shift+H"><input type="checkbox" id="ovEnabled"><span></span></label></h3>
+          <p class="muted small">Tam ekran oyunun üstünde sadece sen görürsün, yayına çıkmaz.</p>
+          <button id="btnOvEdit" class="btn full">Konumu / boyutu düzenle</button>
+          <button id="btnMobile" class="btn full ghost">Telefonda chat (QR)</button>
+          <div class="keys small muted">
+            <span><kbd>Ctrl+Shift+H</kbd> gizle/göster</span>
+            <span><kbd>Ctrl+Shift+O</kbd> düzenle</span>
+            <span><kbd>Ctrl+Shift+M</kbd> mikrofon</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="chat">
+      <div class="chat-head">
+        <h3>Chat</h3>
+        <div id="chatStatus" class="chat-status"></div>
+      </div>
+      <div id="chatList" class="chat-list"></div>
+      <button id="chatJump" class="chat-jump" hidden>Yeni mesajlar ↓</button>
+      <div class="chat-foot">
+        <select id="testKind">
+          <option value="all">Hepsi</option>
+          <option value="chat">Chat</option>
+          <option value="gift">TikTok hediye</option>
+          <option value="superchat">Süper Chat</option>
+          <option value="sub">Kick abonelik</option>
+          <option value="follow">Takip</option>
+        </select>
+        <button id="btnTest" class="btn small">Test olayı</button>
+        <button id="btnReconnect" class="btn small ghost">Yeniden bağlan</button>
+      </div>
+    </aside>
+  </main>
+
+  <div id="toasts" class="toasts"></div>
+
+  <!-- Kaynak seçici -->
+  <dialog id="dlgSources" class="dlg wide">
+    <div class="dlg-head"><h2>Yayına ne gitsin?</h2><button class="x" data-close>✕</button></div>
+    <p class="muted small">Oyunu <b>pencere</b> olarak seçmen önerilir: o zaman oyun üstü chat ve bu uygulama yayına girmez. Minecraft açık değilse önce oyunu aç, sonra <b>Yenile</b>.</p>
+    <div class="tabs-mini"><button class="on" data-st="window">Pencereler</button><button data-st="screen">Ekranlar</button><button id="btnSrcRefresh" class="ghost">Yenile</button></div>
+    <div id="srcGrid" class="src-grid"></div>
+  </dialog>
+
+  <!-- Telefon QR -->
+  <dialog id="dlgMobile" class="dlg">
+    <div class="dlg-head"><h2>Telefonda chat</h2><button class="x" data-close>✕</button></div>
+    <p class="muted small">Telefon bilgisayarla aynı Wi-Fi’de olmalı. Kamerayla QR’ı okut. Windows güvenlik duvarı sorarsa <b>İzin ver</b> de.</p>
+    <div class="qr"><img id="qrImg" alt="QR"></div>
+    <p class="center"><code id="qrUrl"></code></p>
+  </dialog>
+
+  <!-- Ayarlar -->
+  <dialog id="dlgSettings" class="dlg wide">
+    <div class="dlg-head"><h2>Ayarlar</h2><button class="x" data-close>✕</button></div>
+    <nav class="stabs">
+      <button class="on" data-tab="platforms">Platformlar</button>
+      <button data-tab="video">Görüntü &amp; Kodlama</button>
+      <button data-tab="screen">Yayın ekranı</button>
+      <button data-tab="overlay">Oyun üstü chat</button>
+      <button data-tab="adv">Gelişmiş</button>
+    </nav>
+
+    <section class="stab on" data-tab="platforms">
+      <fieldset class="pf-block" style="--c:#ff0033">
+        <legend><label class="switch"><input type="checkbox" data-k="platforms.youtube.enabled"><span></span></label> YouTube’a yayın yap</legend>
+        <label>Kanal (chat için) <input data-k="platforms.youtube.channel" placeholder="@kanaladin ya da yayın linki"></label>
+        <label>Sunucu <input data-k="platforms.youtube.server"></label>
+        <label>Yayın anahtarı <span class="pw"><input type="password" data-k="platforms.youtube.key" autocomplete="off"><button type="button" class="eye">göster</button></span></label>
+        <small class="muted">YouTube Studio → Oluştur → Canlı yayına başla → Akış anahtarı.</small>
+      </fieldset>
+
+      <fieldset class="pf-block" style="--c:#53fc18">
+        <legend><label class="switch"><input type="checkbox" data-k="platforms.kick.enabled"><span></span></label> Kick’e yayın yap</legend>
+        <label>Kanal (chat için) <input data-k="platforms.kick.channel" placeholder="kullanici_adin"></label>
+        <label>Sunucu (Stream URL) <input data-k="platforms.kick.server"></label>
+        <label>Yayın anahtarı <span class="pw"><input type="password" data-k="platforms.kick.key" autocomplete="off"><button type="button" class="eye">göster</button></span></label>
+        <small class="muted">kick.com → Creator Dashboard → Settings → Stream URL &amp; Key. Sunucu adresini oradan kopyala.</small>
+      </fieldset>
+
+      <fieldset class="pf-block" style="--c:#fe2c55">
+        <legend><label class="switch"><input type="checkbox" data-k="platforms.tiktok.enabled"><span></span></label> TikTok’a yayın yap</legend>
+        <label>Kullanıcı adı (chat + hediyeler için) <input data-k="platforms.tiktok.channel" placeholder="@kullaniciadin"></label>
+        <label>Sunucu URL <input data-k="platforms.tiktok.server" placeholder="rtmp://push-rtmp-...tiktokcdn.com/game/"></label>
+        <label>Yayın anahtarı <span class="pw"><input type="password" data-k="platforms.tiktok.key" autocomplete="off"><button type="button" class="eye">göster</button></span></label>
+        <small class="muted">TikTok yayın anahtarı sadece uygun hesaplarda verilir (LIVE Producer / LIVE Studio). Anahtar her yayında değişebilir. Anahtarın yoksa yalnızca kullanıcı adını yaz: chat ve hediyeler yine gelir.</small>
+      </fieldset>
+      <p id="uploadNote" class="note"></p>
+    </section>
+
+    <section class="stab" data-tab="video">
+      <div class="grid2">
+        <label>Çözünürlük
+          <select id="vRes">
+            <option value="1920x1080">1920 × 1080 (1080p)</option>
+            <option value="1600x900">1600 × 900</option>
+            <option value="1280x720">1280 × 720 (720p)</option>
+          </select>
+        </label>
+        <label>FPS
+          <select data-k="video.fps" data-type="number"><option value="60">60</option><option value="30">30</option></select>
+        </label>
+        <label>Video bit hızı (kbps) <input type="number" min="1000" max="20000" step="500" data-k="video.bitrate" data-type="number"></label>
+        <label>Ses bit hızı (kbps)
+          <select data-k="video.audioBitrate" data-type="number"><option>128</option><option>160</option><option>192</option><option>320</option></select>
+        </label>
+        <label>Kodlayıcı
+          <span class="pw"><select id="encSel" data-k="video.encoder"><option value="auto">Otomatik (en iyisi)</option></select><button type="button" id="btnDetect">Tespit et</button></span>
+        </label>
+        <label>Kayıt klasörü
+          <span class="pw"><input data-k="record.dir" readonly><button type="button" id="btnRecDir">Seç</button></span>
+        </label>
+      </div>
+      <p class="note">Öneri: 1080p60 için 6000 kbps. Kick en fazla 8000, TikTok ~6000 ister. Tek kodlama yapılır, sonra her platforma aynı görüntü gider. İnternetinin <b>yükleme</b> hızı en az <i>bit hızı × platform sayısı</i> + %30 olmalı.</p>
+    </section>
+
+    <section class="stab" data-tab="screen">
+      <h4>İzleyicilerin gördüğü chat</h4>
+      <div class="grid2">
+        <label class="inline"><label class="switch"><input type="checkbox" data-k="viewerChat.enabled"><span></span></label> Yayında chat göster</label>
+        <label>Taraf <select data-k="viewerChat.side"><option value="left">Sol</option><option value="right">Sağ</option></select></label>
+        <label>Genişlik (%) <input type="number" min="15" max="50" data-k="viewerChat.width" data-type="number"></label>
+        <label>Yazı boyutu <input type="number" min="14" max="48" data-k="viewerChat.fontSize" data-type="number"></label>
+        <label>En fazla mesaj <input type="number" min="1" max="20" data-k="viewerChat.max" data-type="number"></label>
+        <label>Kaybolma (sn, 0 = hiç) <input type="number" min="0" max="600" data-k="viewerChat.fade" data-type="number"></label>
+      </div>
+      <h4>Hediye / abone uyarıları</h4>
+      <div class="grid2">
+        <label class="inline"><label class="switch"><input type="checkbox" data-k="alerts.enabled"><span></span></label> Ekranda uyarı göster</label>
+        <label class="inline"><label class="switch"><input type="checkbox" data-k="alerts.sound"><span></span></label> Ses çal</label>
+        <label class="inline"><label class="switch"><input type="checkbox" data-k="alerts.follows"><span></span></label> Takipleri de göster</label>
+        <label>Süre (sn) <input type="number" min="2" max="20" data-k="alerts.duration" data-type="number"></label>
+        <label>Ses seviyesi <input type="range" min="0" max="1" step="0.05" data-k="alerts.volume" data-type="number"></label>
+      </div>
+      <h4>Sahne yazıları</h4>
+      <div class="grid2">
+        <label>Başlıyoruz yazısı <input data-k="scenes.startingText"></label>
+        <label>Mola yazısı <input data-k="scenes.brbText"></label>
+        <label class="span2">Alt yazı (ikisinde de) <input data-k="scenes.subtitle" placeholder="ör. Bugün: Minecraft hardcore 1. gün"></label>
+      </div>
+    </section>
+
+    <section class="stab" data-tab="overlay">
+      <div class="grid2">
+        <label class="inline"><label class="switch"><input type="checkbox" data-k="overlay.enabled"><span></span></label> Oyun üstü chat açık</label>
+        <label>Yazı boyutu <input type="number" min="11" max="36" data-k="overlay.fontSize" data-type="number"></label>
+        <label>Arka plan koyuluğu <input type="range" min="0" max="1" step="0.05" data-k="overlay.opacity" data-type="number"></label>
+        <label>Kaybolma (sn, 0 = hiç) <input type="number" min="0" max="600" data-k="overlay.fade" data-type="number"></label>
+        <label>En fazla mesaj <input type="number" min="3" max="40" data-k="overlay.max" data-type="number"></label>
+        <label>&nbsp;<button type="button" id="btnOvReset" class="btn ghost">Konumu sıfırla</button></label>
+      </div>
+      <p class="note">Minecraft’ta tam ekran (F11) çoğu bilgisayarda overlay’le çalışır. Overlay görünmezse oyunu <b>pencereli</b> aç ve ekranı kaplayacak şekilde büyüt, ya da Sodium gibi bir moddaki <b>Kenarlıksız tam ekran</b> seçeneğini kullan. Diğer oyunlarda “Borderless / Kenarlıksız” seç.</p>
+    </section>
+
+    <section class="stab" data-tab="adv">
+      <div class="grid2">
+        <label>FFmpeg yolu (boş = yerleşik) <input data-k="video.ffmpegPath" placeholder="C:\ffmpeg\bin\ffmpeg.exe"></label>
+        <label>Kick chatroom ID (kanal bulunamazsa) <input data-k="platforms.kick.chatroomId" placeholder="boş bırak"></label>
+        <label class="inline"><label class="switch"><input type="checkbox" data-k="mobile.enabled"><span></span></label> Telefondan chat sunucusu</label>
+        <label>Telefon portu <input type="number" data-k="mobile.port" data-type="number"></label>
+        <label class="inline"><label class="switch"><input type="checkbox" data-k="sources.micNoise"><span></span></label> Mikrofon gürültü engelleme</label>
+      </div>
+      <h4>Yayın günlüğü</h4>
+      <pre id="logBox" class="logbox"></pre>
+    </section>
+
+    <div class="dlg-foot">
+      <button class="btn ghost" data-close>Vazgeç</button>
+      <button id="btnSaveSettings" class="btn primary">Kaydet</button>
+    </div>
+  </dialog>
+
+  <script src="chat-render.js"></script>
+  <script src="compositor.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "yayinci-studyo",
+  "productName": "Yayinci Studyo",
+  "version": "0.1.0",
+  "description": "Tek uygulama: yayın motoru + YouTube/Kick/TikTok çoklu yayın + birleşik chat + oyun üstü chat overlay",
+  "main": "src/main/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "check": "node scripts/check.js"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "qrcode": "^1.5.4",
+    "tiktok-live-connector": "^2.0.0",
+    "ws": "^8.18.0",
+    "youtube-chat": "^2.2.0"
+  },
+  "devDependencies": {
+    "electron": "^37.0.0"
+  }
+}

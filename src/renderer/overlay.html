@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http:">
+  <title>Yayıncı Overlay</title>
+  <link rel="stylesheet" href="overlay.css">
+</head>
+<body>
+  <div id="frame">
+    <div id="bar">
+      <span id="liveDot" class="dot"></span>
+      <span id="liveText">ÇEVRİMDIŞI</span>
+      <span id="micWarn" class="warn" hidden>🎤 MİKROFON KAPALI</span>
+      <span id="sceneWarn" class="warn" hidden></span>
+    </div>
+    <div id="list"></div>
+    <div id="edit">
+      <div class="edit-title">Overlay düzenleme — sürükleyerek taşı</div>
+      <div class="edit-ctrl">
+        <span>Genişlik</span><button data-r="-40,0">−</button><button data-r="40,0">+</button>
+        <span>Yükseklik</span><button data-r="0,-60">−</button><button data-r="0,60">+</button>
+        <button id="done" class="done">Bitti</button>
+      </div>
+    </div>
+  </div>
+  <script src="chat-render.js"></script>
+  <script src="overlay.js"></script>
+</body>
+</html>
