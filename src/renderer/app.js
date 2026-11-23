@@ -138,10 +138,98 @@
     }
   }
 
+  // ---- telefon kamerası (WebRTC alıcı; sinyalleşme ana süreç üzerinden) ----
+  let phonePc = null;
+  let phoneStream = null;
+  let phoneState = 'none';
+
+  function gatherDone(pc, ms) {
+    return new Promise((res) => {
+      if (pc.iceGatheringState === 'complete') return res();
+      const t = setTimeout(res, ms);
+      pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } });
+    });
+  }
+
+  function setPhoneState(st) {
+    phoneState = st;
+    const map = { none: ['', 'Telefon bekleniyor'], waiting: ['connecting', 'Telefon sayfası açık, kamera bekleniyor'], connecting: ['connecting', 'Bağlanıyor…'], connected: ['connected', 'Telefon bağlı ✓'], lost: ['error', 'Telefon bağlantısı koptu'] };
+    const [cls, txt] = map[st] || map.none;
+    const el = $('#pcState');
+    if (el) { el.className = 'st-pill ' + cls; el.innerHTML = '<i></i>'; el.append(txt); }
+  }
+
+  function phoneLost() {
+    phoneStream = null;
+    if (S.sources.camId === 'phone') comp.setCamStream(null, false);
+  }
+
+  api.onPhoneCamSignal(async (m) => {
+    if (m.type === 'phone-connected') { setPhoneState('waiting'); return; }
+    if (m.type === 'left') {
+      try { phonePc?.close(); } catch {}
+      phonePc = null;
+      phoneLost();
+      setPhoneState('lost');
+      if (S.sources.camId === 'phone' && S.sources.camEnabled) toast('Telefon kamerası bağlantısı koptu.', 'error');
+      return;
+    }
+    if (m.type !== 'offer') return;
+    try { phonePc?.close(); } catch {}
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    phonePc = pc;
+    setPhoneState('connecting');
+    pc.ontrack = (e) => {
+      phoneStream = e.streams[0] || new MediaStream([e.track]);
+      if (S.sources.camId === 'phone' && S.sources.camEnabled) comp.setCamStream(phoneStream, false);
+    };
+    pc.onconnectionstatechange = () => {
+      if (phonePc !== pc) return;
+      const s = pc.connectionState;
+      if (s === 'connected') {
+        setPhoneState('connected');
+        toast('📱 Telefon kamerası bağlandı', 'ok', 2500);
+        if (S.sources.camId !== 'phone' || !S.sources.camEnabled) {
+          save({ sources: { camId: 'phone', camEnabled: true } }).then(() => { syncQuick(); fillDevices(); captureCam(); });
+        }
+      } else if (s === 'failed' || s === 'closed') { phoneLost(); setPhoneState('lost'); }
+    };
+    try {
+      await pc.setRemoteDescription({ type: 'offer', sdp: m.sdp });
+      await pc.setLocalDescription(await pc.createAnswer());
+      await gatherDone(pc, 2500);
+      api.phoneCamSend({ type: 'answer', sdp: pc.localDescription.sdp });
+    } catch (e) {
+      log('Telefon kamera WebRTC hatası: ' + e.message);
+      setPhoneState('lost');
+    }
+  });
+
+  async function openPhoneCam() {
+    const info = await api.phoneCamInfo();
+    if (info.error) { toast(info.error, 'error', 8000); return; }
+    $('#pcQr').src = info.qr;
+    $('#pcUrl').textContent = info.url;
+    setPhoneState(phoneStream ? 'connected' : info.connected ? 'waiting' : phoneState === 'lost' ? 'lost' : 'none');
+    $('#dlgPhoneCam').showModal();
+    // telefon sayfası zaten açıksa yeniden bağlansın
+    if (info.connected && !phoneStream) api.phoneCamSend({ type: 'renegotiate' });
+  }
+  $('#btnPhoneCam').onclick = openPhoneCam;
+
   async function captureCam() {
-    comp.setCamStream(null);
-    if (!S.sources.camEnabled) return;
+    if (!S.sources.camEnabled) { comp.setCamStream(null); return; }
     const id = S.sources.camId;
+    if (id === 'phone') {
+      if (phoneStream) comp.setCamStream(phoneStream, false);
+      else {
+        comp.setCamStream(null);
+        const info = await api.phoneCamInfo();
+        if (info.connected) api.phoneCamSend({ type: 'renegotiate' });
+      }
+      return;
+    }
+    comp.setCamStream(null);
     try {
       const st = await navigator.mediaDevices.getUserMedia({
         video: { deviceId: id ? { exact: id } : undefined, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
@@ -165,10 +253,11 @@
     if (micSel.value !== S.sources.micId && mics.length) micSel.value = mics[0].deviceId;
     const camSel = $('#camId');
     camSel.innerHTML = '';
-    if (!cams.length) camSel.add(new Option('Kamera bulunamadı', ''));
     for (const d of cams) camSel.add(new Option(d.label || 'Kamera', d.deviceId));
+    camSel.add(new Option('📱 Telefon kamerası', 'phone'));
     if (S.sources.camId) camSel.value = S.sources.camId;
-    if (!S.sources.camId && cams.length) await save({ sources: { camId: cams[0].deviceId } });
+    if (!S.sources.camId) await save({ sources: { camId: cams.length ? cams[0].deviceId : 'phone' } });
+    camSel.value = S.sources.camId;
   }
   navigator.mediaDevices.addEventListener('devicechange', debounce(fillDevices, 500));
 
@@ -190,7 +279,11 @@
   }
 
   $('#camEnabled').onchange = async (e) => { await save({ sources: { camEnabled: e.target.checked } }); captureCam(); };
-  $('#camId').onchange = async (e) => { await save({ sources: { camId: e.target.value } }); captureCam(); };
+  $('#camId').onchange = async (e) => {
+    await save({ sources: { camId: e.target.value } });
+    captureCam();
+    if (e.target.value === 'phone' && !phoneStream) openPhoneCam();
+  };
   $('#camCorner').onchange = (e) => save({ sources: { camCorner: e.target.value } });
   const saveCamSize = debounce((v) => save({ sources: { camSize: v } }), 300);
   $('#camSize').oninput = (e) => { S.sources.camSize = Number(e.target.value); comp.configure(S); saveCamSize(S.sources.camSize); };

@@ -58,6 +58,7 @@
             </select>
           </div>
           <div class="row"><label for="camSize">Boyut</label><input type="range" id="camSize" min="10" max="45" step="1"></div>
+          <button id="btnPhoneCam" class="btn full ghost">📱 Telefonu kamera yap</button>
         </div>
 
         <div class="panel">
@@ -133,6 +134,22 @@
     <p class="muted small">Telefon bilgisayarla aynı Wi-Fi’de olmalı. Kamerayla QR’ı okut. Windows güvenlik duvarı sorarsa <b>İzin ver</b> de.</p>
     <div class="qr"><img id="qrImg" alt="QR"></div>
     <p class="center"><code id="qrUrl"></code></p>
+  </dialog>
+
+  <!-- Telefon kamerası -->
+  <dialog id="dlgPhoneCam" class="dlg">
+    <div class="dlg-head"><h2>📱 Telefonu kamera yap</h2><button class="x" data-close>✕</button></div>
+    <ol class="steps small">
+      <li>Telefon bilgisayarla <b>aynı Wi-Fi</b>’de olsun.</li>
+      <li>QR’ı telefonun kamerasıyla okut.</li>
+      <li>“Bağlantı gizli değil / güvenli değil” uyarısı çıkacak. Bu normal, sayfayı bu uygulama açıyor.
+        <br><b>Android:</b> Gelişmiş → Siteye devam et · <b>iPhone:</b> Ayrıntıları göster → Bu web sitesini ziyaret et</li>
+      <li><b>Kamerayı başlat</b>’a bas, izin ver. Telefonu yatay tut ve şarja tak.</li>
+    </ol>
+    <div class="qr"><img id="pcQr" alt="QR"></div>
+    <p class="center"><code id="pcUrl"></code></p>
+    <p class="center"><span id="pcState" class="st-pill"><i></i>Telefon bekleniyor</span></p>
+    <p class="muted small">Windows güvenlik duvarı sorarsa <b>Özel ağlar</b> için izin ver.</p>
   </dialog>
 
   <!-- Ayarlar -->

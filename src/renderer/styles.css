@@ -175,6 +175,8 @@ input[type=range] { accent-color: var(--acc); }
 .src-item .nm { display: flex; gap: 6px; align-items: center; font-size: 12px; min-width: 0; }
 .src-item .nm img { width: 16px; height: 16px; flex: none; }
 .src-item .nm span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.steps { margin: 4px 0 6px; padding-left: 20px; color: var(--mut); line-height: 1.6; }
+.steps b { color: var(--tx); }
 .qr { display: flex; justify-content: center; padding: 10px; }
 .qr img { width: 240px; height: 240px; background: #fff; border-radius: 10px; padding: 8px; }
 

@@ -41,6 +41,9 @@ contextBridge.exposeInMainWorld('api', {
 
   onHotkey: on('hotkey'),
   mobileInfo: inv('mobile:info'),
+  phoneCamInfo: inv('phonecam:info'),
+  phoneCamSend: (msg) => ipcRenderer.send('phonecam:send', msg),
+  onPhoneCamSignal: on('phonecam:signal'),
   openExternal: inv('open:external'),
   openPath: inv('open:path'),
   pickFolder: inv('dialog:folder')

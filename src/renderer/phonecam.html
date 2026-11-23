@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0e12">
+<title>Telefon Kamerası</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; color: #eef0f4; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
+  video.mirror { transform: scaleX(-1); }
+  .top { position: fixed; top: 0; left: 0; right: 0; padding: calc(env(safe-area-inset-top) + 10px) 14px 10px; display: flex; align-items: center; gap: 8px; background: linear-gradient(#000c, #0000); }
+  .pill { display: inline-flex; align-items: center; gap: 7px; background: #000a; padding: 6px 12px; border-radius: 99px; font-size: 14px; font-weight: 600; }
+  .pill i { width: 9px; height: 9px; border-radius: 50%; background: #ffc53d; }
+  .pill.ok i { background: #3ddc84; box-shadow: 0 0 8px #3ddc84; }
+  .pill.err i { background: #ff3b4e; }
+  .bottom { position: fixed; bottom: 0; left: 0; right: 0; padding: 14px 14px calc(env(safe-area-inset-bottom) + 18px); display: flex; justify-content: center; gap: 12px; background: linear-gradient(#0000, #000c); }
+  button { background: #1f2330e6; color: #fff; border: 1px solid #3a4152; border-radius: 14px; padding: 12px 16px; font-size: 15px; font-weight: 600; }
+  button.main { background: #7c5cff; border-color: #7c5cff; }
+  #start { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 30px; text-align: center; background: #0d0e12; }
+  #start h1 { margin: 0; font-size: 22px; }
+  #start p { margin: 0; color: #9aa3b2; line-height: 1.5; max-width: 340px; }
+  #start button { font-size: 18px; padding: 16px 28px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<video id="v" autoplay playsinline muted class="mirror"></video>
+
+<div class="top"><span id="st" class="pill"><i></i><span id="stText">Bekleniyor</span></span></div>
+<div class="bottom">
+  <button id="flip">🔄 Ön/Arka</button>
+  <button id="quality">720p</button>
+  <button id="mirror">↔ Ayna</button>
+</div>
+
+<div id="start">
+  <h1>📱 Telefonu kamera yap</h1>
+  <p>Telefonu yatay tut, şarja takılı olsun. Ekran açık kalmalı. Uygulama otomatik bağlanır.</p>
+  <button id="go" class="main">Kamerayı başlat</button>
+  <p id="err" style="color:#ff6b6b"></p>
+</div>
+
+<script>
+  const v = document.getElementById('v');
+  let facing = 'user';
+  let quality = 720;
+  let stream = null;
+  let pc = null;
+  let sender = null;
+  let ws = null;
+  let wakeLock = null;
+
+  function status(text, cls) {
+    document.getElementById('stText').textContent = text;
+    document.getElementById('st').className = 'pill ' + (cls || '');
+  }
+
+  async function openCam() {
+    if (stream) stream.getTracks().forEach((t) => t.stop()); // bazı telefonlar iki kamerayı aynı anda açamaz
+    const h = quality, w = Math.round(quality * 16 / 9);
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: facing, width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 30 } },
+      audio: false
+    });
+    v.srcObject = stream;
+    v.classList.toggle('mirror', facing === 'user');
+    const track = stream.getVideoTracks()[0];
+    track.contentHint = 'motion';
+    if (sender) await sender.replaceTrack(track);
+  }
+
+  function gather(p, ms) {
+    return new Promise((res) => {
+      if (p.iceGatheringState === 'complete') return res();
+      const t = setTimeout(res, ms);
+      p.addEventListener('icegatheringstatechange', () => { if (p.iceGatheringState === 'complete') { clearTimeout(t); res(); } });
+    });
+  }
+
+  async function negotiate() {
+    if (!stream || !ws || ws.readyState !== 1) return;
+    if (pc) { try { pc.close(); } catch {} }
+    pc = new RTCPeerConnection({ iceServers: [] });
+    const track = stream.getVideoTracks()[0];
+    sender = pc.addTrack(track, stream);
+    pc.onconnectionstatechange = () => {
+      const s = pc.connectionState;
+      if (s === 'connected') status('Yayında ● bağlı', 'ok');
+      else if (s === 'connecting' || s === 'new') status('Bağlanıyor…');
+      else if (s === 'failed') { status('Bağlantı kurulamadı, tekrar deneniyor', 'err'); setTimeout(negotiate, 2000); }
+      else if (s === 'disconnected') status('Bağlantı zayıf…', 'err');
+    };
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    try {
+      const p = sender.getParameters();
+      if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+      p.encodings[0].maxBitrate = quality >= 1080 ? 8000000 : 5000000;
+      p.encodings[0].maxFramerate = 30;
+      await sender.setParameters(p);
+    } catch {}
+    await gather(pc, 2500);
+    ws.send(JSON.stringify({ type: 'offer', sdp: pc.localDescription.sdp }));
+    status('Bağlanıyor…');
+  }
+
+  function connect() {
+    ws = new WebSocket(`wss://${location.host}`);
+    ws.onopen = () => negotiate();
+    ws.onmessage = async (m) => {
+      const d = JSON.parse(m.data);
+      if (d.type === 'answer' && pc) await pc.setRemoteDescription({ type: 'answer', sdp: d.sdp });
+      if (d.type === 'renegotiate') negotiate();
+    };
+    ws.onclose = () => { status('Uygulamaya ulaşılamıyor, tekrar deneniyor…', 'err'); setTimeout(connect, 2000); };
+  }
+
+  async function keepAwake() {
+    try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch {}
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && stream) keepAwake(); });
+
+  document.getElementById('go').onclick = async () => {
+    try {
+      await openCam();
+      document.getElementById('start').classList.add('hidden');
+      keepAwake();
+      connect();
+    } catch (e) {
+      document.getElementById('err').textContent = 'Kamera açılamadı: ' + e.message + '. Tarayıcı ayarlarından kamera iznini ver.';
+    }
+  };
+  document.getElementById('flip').onclick = async () => {
+    facing = facing === 'user' ? 'environment' : 'user';
+    try { await openCam(); } catch (e) { status('Kamera değişmedi: ' + e.message, 'err'); }
+  };
+  document.getElementById('quality').onclick = async (e) => {
+    quality = quality === 720 ? 1080 : 720;
+    e.target.textContent = quality + 'p';
+    try { await openCam(); negotiate(); } catch (err) { status('Kalite değişmedi: ' + err.message, 'err'); }
+  };
+  document.getElementById('mirror').onclick = () => v.classList.toggle('mirror');
+
+  if (!window.isSecureContext || !navigator.mediaDevices) {
+    document.getElementById('err').textContent = 'Bu sayfa güvenli bağlantı ister. Adresin https:// ile başladığından emin ol.';
+  }
+</script>
+</body>
+</html>

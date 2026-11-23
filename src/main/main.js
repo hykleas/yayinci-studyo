@@ -4,6 +4,7 @@ const settings = require('./settings');
 const { StreamEngine, detectEncoders, ffmpegBin, ENCODER_LABEL } = require('./ffmpeg');
 const { ChatHub } = require('./chat/hub');
 const { MobileServer } = require('./mobile');
+const { PhoneCam } = require('./phonecam');
 
 // Arka planda / küçültülmüşken de yayın çizimi yavaşlamasın
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
@@ -26,6 +27,19 @@ let quitting = false;
 const engine = new StreamEngine();
 const hub = new ChatHub({ fetchJson: fetchJsonBrowser });
 const mobile = new MobileServer(hub);
+const phoneCam = new PhoneCam();
+
+// Telefon kamerası sunucusu sadece ilk kullanımda açılır (sertifika + güvenlik duvarı sorusu o zaman)
+function ensurePhoneCam() {
+  if (phoneCam.server) return true;
+  try {
+    phoneCam.start(Number(settings.get().phoneCam.port) || 7789, app.getPath('userData'));
+    return true;
+  } catch (e) {
+    console.error('[telefon kamera]', e);
+    return false;
+  }
+}
 
 function send(win, ch, data) { if (win && !win.isDestroyed()) win.webContents.send(ch, data); }
 function broadcast(ch, data) { send(mainWin, ch, data); send(overlayWin, ch, data); }
@@ -219,6 +233,17 @@ function setupIpc() {
     return { url, qr };
   });
 
+  ipcMain.handle('phonecam:info', async () => {
+    if (!ensurePhoneCam()) return { error: 'Telefon kamera sunucusu açılamadı (selfsigned paketi kurulu mu? npm install)' };
+    const url = phoneCam.url();
+    let qr = '';
+    try { qr = await require('qrcode').toDataURL(url, { margin: 1, width: 240 }); } catch {}
+    return { url, qr, connected: phoneCam.connected };
+  });
+  ipcMain.on('phonecam:send', (_e, msg) => phoneCam.send(msg));
+  phoneCam.on('signal', (m) => send(mainWin, 'phonecam:signal', m));
+  phoneCam.on('error', (e) => send(mainWin, 'stream:log', { level: 'error', text: 'Telefon kamera sunucusu: ' + e.message }));
+
   ipcMain.handle('open:external', (_e, url) => { if (/^https?:\/\//.test(url)) shell.openExternal(url); });
   ipcMain.handle('open:path', (_e, p) => shell.openPath(p));
   ipcMain.handle('dialog:folder', async () => {
@@ -254,6 +279,7 @@ app.whenReady().then(() => {
   setupShortcuts();
   hub.configure(s.platforms);
   if (s.mobile.enabled) mobile.start(Number(s.mobile.port) || 7788);
+  if (s.sources.camId === 'phone') ensurePhoneCam();
 });
 
 app.on('second-instance', () => { if (mainWin) { if (mainWin.isMinimized()) mainWin.restore(); mainWin.focus(); } });
@@ -271,4 +297,5 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   hub.stopAll();
   mobile.stop();
+  phoneCam.stop();
 });

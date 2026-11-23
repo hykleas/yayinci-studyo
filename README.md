@@ -7,6 +7,7 @@ OBS + chat uygulaması + çoklu yayın servisini tek uygulamada birleştirir (Wi
 - **Birleşik chat:** YouTube, Kick ve TikTok chat'i tek listede görünür. Hediyeler de gelir: TikTok hediyeleri, Kick abonelik/KICKs, YouTube Süper Chat ve üyelik.
 - **İzleyicinin gördüğü chat ve uyarılar:** Chat ve hediye/abone uyarıları (sesli, animasyonlu) yayın görüntüsünün içine çizilir. Ayrıca bir "browser source" kurmaya gerek yoktur.
 - **Oyun üstü chat:** Tam ekran oyunun (Minecraft) üstünde şeffaf ve tıklanamaz bir chat penceresi açılır. **Sadece sen görürsün**, yayına girmez. İkinci monitöre gerek kalmaz.
+- **Telefonu kamera yap:** Webcam'i olmayanlar için. QR'ı okut, telefonun tarayıcısında "Kamerayı başlat"a bas. Uygulama indirmek gerekmez. Görüntü aynı Wi-Fi üzerinden WebRTC ile gelir; ön/arka kamera ve 720p/1080p seçilebilir. Telefon dik tutulursa görüntü kare kırpılır.
 - **Telefonda chat:** QR kodu okutunca telefonda chat açılır (aynı Wi-Fi'de olmalı).
 - **Sahneler:** Oyun / Başlıyoruz / Mola arasında yumuşak geçiş yapılır.
 
@@ -67,4 +68,5 @@ TikTok (tiktok-live-connector) ┘
 - Kick kanal bilgisi Cloudflare arkasında. Alınamazsa **Ayarlar → Gelişmiş → Kick chatroom ID** elle girilebilir.
 - TikTok için dikey (9:16) ayrı çıkış henüz yok. Şu an tüm platformlara aynı yatay görüntü gider.
 - Chat'e uygulamadan mesaj yazma henüz yok.
+- Telefon kamerası kendinden imzalı HTTPS sertifikası kullanır. Telefonda bir kerelik "güvenli değil → yine de devam et" uyarısı çıkar. Bu normaldir: telefon tarayıcıları kamerayı sadece HTTPS sayfalara verir.
 - Overlay, "özel tam ekran" (exclusive fullscreen) kullanan bazı oyunlarda görünmeyebilir. Bu durumda oyunu kenarlıksız/pencereli moda al.

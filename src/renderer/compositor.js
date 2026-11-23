@@ -162,14 +162,16 @@
       this.worker.postMessage(1000 / this.fps);
     }
 
-    attach(video, stream) {
+    // own=false: akış başkasına ait (ör. telefon kamerası), değiştirilince kapatılmaz
+    attach(video, stream, own = true) {
       const old = video.srcObject;
-      if (old && old !== stream) old.getTracks().forEach((t) => t.stop());
+      if (old && old !== stream && video._own !== false) old.getTracks().forEach((t) => t.stop());
+      video._own = own;
       video.srcObject = stream || null;
       if (stream) video.play().catch(() => {});
     }
     setGameStream(stream) { this.attach(this.gameVideo, stream); }
-    setCamStream(stream) { this.attach(this.camVideo, stream); }
+    setCamStream(stream, own = true) { this.attach(this.camVideo, stream, own); }
 
     setScene(name) {
       if (name === this.scene) return;
@@ -265,11 +267,14 @@
       const { W, H, s } = this;
       const v = this.camVideo;
       const w = W * (c.camSize || 22) / 100;
-      const h = w * (v.videoHeight / v.videoWidth);
+      // Dikey görüntü (telefon dik tutulmuş) uzun şerit olmasın: en fazla kare, ortadan kırp
+      const aspect = Math.min(v.videoHeight / v.videoWidth, 1);
+      const h = w * aspect;
       const m = 28 * s;
       const x = c.camCorner.endsWith('l') ? m : W - w - m;
       const y = c.camCorner.startsWith('t') ? m : H - h - m;
-      return { x, y, w, h };
+      const sh = v.videoWidth * aspect;
+      return { x, y, w, h, sx: 0, sy: (v.videoHeight - sh) / 2, sw: v.videoWidth, sh };
     }
 
     drawCam() {
@@ -284,7 +289,7 @@
       ctx.fill();
       ctx.shadowBlur = 0;
       ctx.clip();
-      ctx.drawImage(this.camVideo, r.x, r.y, r.w, r.h);
+      ctx.drawImage(this.camVideo, r.sx, r.sy, r.sw, r.sh, r.x, r.y, r.w, r.h);
       ctx.restore();
       ctx.save();
       rr(ctx, r.x, r.y, r.w, r.h, 18 * s);

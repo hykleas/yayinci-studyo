@@ -21,7 +21,8 @@ const DEFAULTS = {
   viewerChat: { enabled: true, side: 'left', width: 26, fontSize: 26, max: 8, fade: 60 },
   alerts: { enabled: true, sound: true, volume: 0.5, follows: true, duration: 6 },
   overlay: { enabled: true, bounds: null, fontSize: 17, opacity: 0.55, fade: 45, max: 14 },
-  mobile: { enabled: true, port: 7788 }
+  mobile: { enabled: true, port: 7788 },
+  phoneCam: { port: 7789 }
 };
 
 const SECRET_PATHS = ['youtube', 'kick', 'tiktok'];
